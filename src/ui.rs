@@ -67,7 +67,7 @@ mod elements {
                 Draw::Element(id, name, state) => {
                     let len = name.len();
                     Line::from("|")
-                        .append(state.as_char())
+                        .append((id.index + 1).to_string().chars().last().unwrap())
                         .styled(ContentStyle::new().with(match state {
                             ElementState::Confirmed => Color::Green,
                             ElementState::Dismissed => Color::Red,
@@ -75,7 +75,7 @@ mod elements {
                         }))
                         .append("| ")
                         .append(name)
-                        .styled(ContentStyle::new().with(get_element_color(id, &*constraints)))
+                        .styled(ContentStyle::new().with(get_element_color(id, &constraints)))
                         .append(" ".repeat(max_name_length - len))
                         .append(" |")
                 }
@@ -185,9 +185,8 @@ mod console {
         lines.insert(
             0,
             Line::from("+-")
-                .append("Console")
-                .styled(ContentStyle::new().attribute(Attribute::Bold))
-                .append("-".repeat(max_len - 6))
+                .append("Console-(cdu)")
+                .append("-".repeat(max_len - 12))
                 .append("+"),
         );
         lines.push(format!("+{}+", "-".repeat(max_len + 2)).into());
@@ -246,14 +245,6 @@ pub struct Line {
 }
 
 impl Line {
-    fn content(&self) -> String {
-        self.elements
-            .iter()
-            .map(|x| x.content().to_string())
-            .collect::<Vec<_>>()
-            .join("")
-    }
-
     fn append<T: Into<Line>>(self, other: T) -> Self {
         let new = other.into();
         Self {

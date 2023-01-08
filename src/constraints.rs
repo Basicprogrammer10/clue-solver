@@ -57,7 +57,7 @@ impl Constraint {
         for i in 0..TEST_STATES.len() {
             let mut elements = elements.clone();
             elements.set_state(&solve_for, TEST_STATES[i]);
-            result[i] = self._evaluate(&self.0, &elements);
+            result[i] = Self::_evaluate(&self.0, &elements);
         }
 
         Ok((
@@ -73,11 +73,11 @@ impl Constraint {
 
     // true -> Confirmed
     // false -> Dismissed
-    fn _evaluate(&self, token: &Token, elements: &Elements) -> bool {
+    fn _evaluate(token: &Token, elements: &Elements) -> bool {
         match token {
             Token::Tree(op, a, b) => {
-                let a = self._evaluate(a, elements);
-                let b = self._evaluate(b, elements);
+                let a = Self::_evaluate(a, elements);
+                let b = Self::_evaluate(b, elements);
 
                 match op {
                     Ops::Or => a || b,
@@ -155,7 +155,7 @@ mod tokenize {
                 Some('w') => ElementType::Weapon,
                 Some('l') => ElementType::Location,
                 Some('p') => ElementType::Person,
-                _ => return Err(ProcesResult::InvalidSection),
+                _ => return Err(ProcesResult::Section),
             };
 
             let index = chars
@@ -164,7 +164,7 @@ mod tokenize {
                 .parse::<usize>()
                 .ok()
                 .map(|x| x.saturating_sub(1))
-                .ok_or(ProcesResult::InvalidIndex)?;
+                .ok_or(ProcesResult::Index)?;
 
             self.working.clear();
             self.out.push(Token::Element(ElementIdentifier {
@@ -200,7 +200,7 @@ mod tree {
 
     pub fn parse(mut tokens: Vec<Token>) -> Result<Constraint, ProcesResult> {
         if tokens.len() <= 1 {
-            return Err(ProcesResult::InvalidConstraint);
+            return Err(ProcesResult::Constraint);
         }
 
         while tokens.len() > 1 {
@@ -220,7 +220,7 @@ mod tree {
         }
 
         if tokens.len() != 1 || !matches!(tokens[0], Token::Tree(..)) {
-            return Err(ProcesResult::InvalidConstraint);
+            return Err(ProcesResult::Constraint);
         }
 
         Ok(Constraint(tokens[0].clone()))
@@ -228,7 +228,7 @@ mod tree {
 
     fn safe_remove(tokens: &mut Vec<Token>, index: isize) -> Result<Token, ProcesResult> {
         if index < 0 || index as usize >= tokens.len() {
-            return Err(ProcesResult::InvalidConstraint);
+            return Err(ProcesResult::Constraint);
         }
 
         Ok(tokens.remove(index as usize))

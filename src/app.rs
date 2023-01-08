@@ -9,7 +9,7 @@ use parking_lot::RwLock;
 
 use crate::{
     constraints::{Constraint, Solvable, SolvedState},
-    element::{ElementIdentifier, Elements, ProcesResult},
+    element::{ElementIdentifier, Elements},
 };
 
 pub struct App {
@@ -47,7 +47,7 @@ impl App {
         cache.clear();
 
         for constraint in constraints.iter() {
-            match constraint.solve(&*elements) {
+            match constraint.solve(&elements) {
                 Ok((element, state)) => {
                     cache.insert(element, Some(state));
                 }
@@ -65,22 +65,39 @@ impl App {
             process::exit(0);
         }
 
-        let mut elements = self.elements.write();
-        let mut error = match elements.process_action(&command) {
-            ProcesResult::Success => None,
-            x => Some(x.to_string()),
-        };
+        // Todo: move this someware else
+        if command.starts_with('r') {
+            let index = command
+                .chars()
+                .skip(1)
+                .take_while(|x| x.is_ascii_digit())
+                .collect::<String>()
+                .parse::<usize>()
+                .unwrap()
+                .saturating_sub(1);
 
-        if error.is_some() {
-            match Constraint::parse(&command) {
-                Ok(x) => {
-                    self.constraints.write().push(x);
-                    error = None;
-                }
-                _ => {}
-            };
+            let mut constraints = self.constraints.write();
+            if index < constraints.len() {
+                constraints.remove(index);
+            }
+
+            self.command_history.write().push((command, None));
+            return;
         }
 
-        self.command_history.write().push((command, error));
+        let mut elements = self.elements.write();
+        let mut error = elements.process_action(&command);
+
+        if error.is_some() {
+            if let Ok(x) = Constraint::parse(&command) {
+                self.constraints.write().push(x);
+                error = None;
+            }
+        }
+
+        self.command_history.write().push((
+            command,
+            error.map(|x| x.unwrap_or_else(|| "Error".to_owned())),
+        ));
     }
 }

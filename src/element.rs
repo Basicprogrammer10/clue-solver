@@ -68,14 +68,13 @@ impl Elements {
         })
     }
 
-    pub fn process_action(&mut self, inp: &str) -> ProcesResult {
+    pub fn process_action(&mut self, inp: &str) -> Option<Option<String>> {
         let mut chars = inp.chars();
         let section = match chars.next() {
             Some('l') => &mut self.locations,
             Some('p') => &mut self.people,
             Some('w') => &mut self.weapons,
-            Some(_) => return ProcesResult::InvalidSection,
-            None => return ProcesResult::Next,
+            _ => return Some(None),
         };
 
         let index = chars
@@ -84,21 +83,20 @@ impl Elements {
             .collect::<String>();
         let index_len = index.len();
         let index = match index.parse::<usize>().ok().map(|x| x.saturating_sub(1)) {
-            Some(x) if x >= section.len() => return ProcesResult::InvalidIndex,
+            Some(x) if x >= section.len() => return Some(Some("Invalid index".to_owned())),
             Some(x) => x,
-            None => return ProcesResult::InvalidIndex,
+            None => return Some(None),
         };
 
         let new_state = match chars.nth(index_len) {
             Some('c') => ElementState::Confirmed,
-            Some('x') => ElementState::Dismissed,
+            Some('d') => ElementState::Dismissed,
             Some('u') => ElementState::Unknown,
-            Some(_) => return ProcesResult::InvalidState,
-            None => return ProcesResult::Next,
+            _ => return Some(None),
         };
 
         section[index].state = new_state;
-        ProcesResult::Success
+        None
     }
 
     pub fn get_state(&self, id: &ElementIdentifier) -> ElementState {
@@ -132,13 +130,9 @@ impl Elements {
 
 #[derive(Debug)]
 pub enum ProcesResult {
-    Next,
-    Success,
-
-    InvalidSection,
-    InvalidIndex,
-    InvalidState,
-    InvalidConstraint,
+    Section,
+    Index,
+    Constraint,
 }
 
 impl Element {
@@ -150,26 +144,12 @@ impl Element {
     }
 }
 
-impl ElementState {
-    pub fn as_char(&self) -> char {
-        match self {
-            Self::Unknown => '?',
-            Self::Confirmed => 'C',
-            Self::Dismissed => 'X',
-        }
-    }
-}
-
 impl Display for ProcesResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Next => write!(f, "Next"),
-            Self::Success => write!(f, "Success"),
-
-            Self::InvalidSection => write!(f, "Invalid section"),
-            Self::InvalidIndex => write!(f, "Invalid index"),
-            Self::InvalidState => write!(f, "Invalid state"),
-            Self::InvalidConstraint => write!(f, "Invalid constraint"),
+            Self::Section => write!(f, "Invalid section"),
+            Self::Index => write!(f, "Invalid index"),
+            Self::Constraint => write!(f, "Invalid constraint"),
         }
     }
 }
