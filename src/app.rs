@@ -35,7 +35,7 @@ impl App {
             process::exit(0);
         }
 
-        let error = match self.elements.write().process(&command) {
+        let error = match self.elements.write().process_action(&command) {
             ProcesResult::Success => None,
             x => Some(x.to_string()),
         };

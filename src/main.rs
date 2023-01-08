@@ -8,6 +8,7 @@ use crossterm::{
 use element::Elements;
 
 mod app;
+mod constraints;
 mod element;
 mod ui;
 
