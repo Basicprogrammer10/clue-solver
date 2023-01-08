@@ -2,11 +2,11 @@ use std::{fmt::Display, ops::Deref};
 
 use crate::element::{ElementIdentifier, ElementState, ElementType, Elements, ProcesResult};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 // A token garented to be a tree
 pub struct Constraint(Token);
 
-enum Solvable {
+pub enum Solvable {
     Yes(ElementIdentifier),
     AlreadySolved,
     No,
@@ -96,20 +96,21 @@ impl Constraint {
     }
 }
 
-enum SolvedState {
+#[derive(Debug)]
+pub enum SolvedState {
     Confirmed,
     Dismissed,
     Any,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Token {
     Op(Ops),
     Element(ElementIdentifier),
     Tree(Ops, Box<Token>, Box<Token>),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Ops {
     Or,
 }

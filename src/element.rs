@@ -20,13 +20,13 @@ pub struct Element {
     pub state: ElementState,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ElementIdentifier {
     pub element_type: ElementType,
     pub index: usize,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 
 pub enum ElementType {
     Weapon,
@@ -92,6 +92,7 @@ impl Elements {
         let new_state = match chars.nth(index_len) {
             Some('c') => ElementState::Confirmed,
             Some('x') => ElementState::Dismissed,
+            Some('u') => ElementState::Unknown,
             Some(_) => return ProcesResult::InvalidState,
             None => return ProcesResult::Next,
         };

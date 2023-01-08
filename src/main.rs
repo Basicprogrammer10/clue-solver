@@ -25,6 +25,7 @@ fn main() {
     ui::draw(app.clone());
     for line in stdin().lines().map(Result::unwrap) {
         app.execute_command(line);
+        app.refresh_constraints();
         ui::draw(app.clone());
     }
 }

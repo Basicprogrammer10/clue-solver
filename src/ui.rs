@@ -43,28 +43,55 @@ pub fn draw(app: Arc<App>) {
 }
 
 mod elements {
+    use crossterm::style::{Color, Stylize};
+    use hashbrown::HashMap;
+
+    use crate::{
+        constraints::SolvedState,
+        element::{ElementIdentifier, ElementType},
+    };
+
     use super::*;
 
     pub fn get(app: Arc<App>) -> Lines {
+        let app_cache = app.clone();
         let max_name_length = app.elements.read().max_name_length;
+        let constraints = app_cache.constraint_cache.read();
         get_draw(app)
             .into_iter()
-            .map(|element| {
-                match element {
-                    Draw::Separator(title) => {
-                        let padding = "-".repeat(max_name_length + 1 - title.len());
-                        format!("+-+-{}{}+", title, padding)
-                    }
-                    Draw::Element(name, state) => format!(
-                        "|{}| {}{} |",
-                        state.as_char(),
-                        name,
-                        " ".repeat(max_name_length - name.len())
-                    ),
+            .map(|element| match element {
+                Draw::Separator(title) => {
+                    let padding = "-".repeat(max_name_length + 1 - title.len());
+                    format!("+-+-{}{}+", title, padding).into()
                 }
-                .into()
+                Draw::Element(id, name, state) => {
+                    let len = name.len();
+                    Line::from("|")
+                        .append(state.as_char())
+                        .styled(ContentStyle::new().with(match state {
+                            ElementState::Confirmed => Color::Green,
+                            ElementState::Dismissed => Color::Red,
+                            _ => Color::Reset,
+                        }))
+                        .append("| ")
+                        .append(name)
+                        .styled(ContentStyle::new().with(get_element_color(id, &*constraints)))
+                        .append(" ".repeat(max_name_length - len))
+                        .append(" |")
+                }
             })
             .collect()
+    }
+
+    fn get_element_color(
+        id: ElementIdentifier,
+        constraints: &HashMap<ElementIdentifier, Option<SolvedState>>,
+    ) -> Color {
+        match constraints.get(&id) {
+            Some(Some(SolvedState::Confirmed)) => Color::Green,
+            Some(Some(SolvedState::Dismissed)) => Color::Red,
+            _ => Color::Reset,
+        }
     }
 
     fn get_draw(app: Arc<App>) -> Vec<Draw> {
@@ -73,16 +100,37 @@ mod elements {
 
         // Todo: Replace this with iterator magic
         out.push(Draw::Separator("(L)ocations".to_string()));
-        for element in &card.locations {
-            out.push(Draw::Element(element.name.clone(), element.state));
+        for (i, element) in card.locations.iter().enumerate() {
+            out.push(Draw::Element(
+                ElementIdentifier {
+                    element_type: ElementType::Location,
+                    index: i,
+                },
+                element.name.clone(),
+                element.state,
+            ));
         }
         out.push(Draw::Separator("(P)eople".to_string()));
-        for element in &card.people {
-            out.push(Draw::Element(element.name.clone(), element.state));
+        for (i, element) in card.people.iter().enumerate() {
+            out.push(Draw::Element(
+                ElementIdentifier {
+                    element_type: ElementType::Person,
+                    index: i,
+                },
+                element.name.clone(),
+                element.state,
+            ));
         }
         out.push(Draw::Separator("(W)eapons".to_string()));
-        for element in &card.weapons {
-            out.push(Draw::Element(element.name.clone(), element.state));
+        for (i, element) in card.weapons.iter().enumerate() {
+            out.push(Draw::Element(
+                ElementIdentifier {
+                    element_type: ElementType::Weapon,
+                    index: i,
+                },
+                element.name.clone(),
+                element.state,
+            ));
         }
         out.push(Draw::Separator("".to_string()));
 
@@ -91,7 +139,7 @@ mod elements {
 
     enum Draw {
         Separator(String),
-        Element(String, ElementState),
+        Element(ElementIdentifier, String, ElementState),
     }
 }
 
@@ -106,7 +154,7 @@ mod console {
             .read()
             .iter()
             .rev()
-            .take(5)
+            .take(3)
             .map(|x| {
                 Line::from(format!("{}: ", x.0))
                     .append(x.1.clone().unwrap_or_else(|| "ok".to_owned()))
@@ -120,6 +168,11 @@ mod console {
                     )
             })
             .collect::<Vec<Line>>();
+
+        if app.command_history.read().len() > 3 {
+            lines.push(Line::from("...").styled(ContentStyle::new().with(Color::DarkGrey)));
+        }
+
         let max_len = lines.iter().map(|x| x.len).max().unwrap_or(0).max(20);
         lines.iter_mut().for_each(|x| {
             *x = Line::from("| ")
@@ -146,20 +199,35 @@ mod console {
 }
 
 mod constraints {
+    use crossterm::style::{Color, Stylize};
+
     use super::*;
 
     pub fn get(app: Arc<App>) -> Lines {
+        let unsolved = app.unsolved_constraints.read();
+
         let mut lines = app
             .constraints
             .read()
             .iter()
             .rev()
-            .map(|x| x.to_string().into())
+            .map(|x| {
+                Line::from(x.to_string()).styled(ContentStyle::new().with(
+                    if unsolved.contains(x) {
+                        Color::DarkGrey
+                    } else {
+                        Color::Reset
+                    },
+                ))
+            })
             .collect::<Vec<Line>>();
 
         let max_len = lines.iter().map(|x| x.len).max().unwrap_or(0).max(20);
         lines.iter_mut().for_each(|x| {
-            *x = format!("| {}{} |", x.content(), " ".repeat(max_len - x.len)).into()
+            *x = Line::from("| ")
+                .append_line(x)
+                .append(" ".repeat(max_len - x.len))
+                .append(" |")
         });
 
         lines.insert(
@@ -178,13 +246,6 @@ pub struct Line {
 }
 
 impl Line {
-    fn new() -> Self {
-        Self {
-            elements: Vec::new(),
-            len: 0,
-        }
-    }
-
     fn content(&self) -> String {
         self.elements
             .iter()
