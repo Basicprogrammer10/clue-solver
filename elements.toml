@@ -1,0 +1,3 @@
+locations = ["Terrace", "Lobby", "Library", "Tip Top Club", "Guest Room", "Billiard Room", "Lounge", "Kitchen", "Boiler Room"]
+people = ["Mickey Mouse", "Minnie Mouse", "Donald Duck", "Goofy", "Pete"]
+weapons = ["Clapboard", "Camera", "Room Key", "Script", "Film Reel", "Mickey Statue"]
