@@ -172,3 +172,15 @@ impl Display for ProcesResult {
         }
     }
 }
+
+impl Display for ElementIdentifier {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let section = match self.element_type {
+            ElementType::Location => "l",
+            ElementType::Person => "p",
+            ElementType::Weapon => "w",
+        };
+
+        write!(f, "{}{}", section, self.index + 1)
+    }
+}

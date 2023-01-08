@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{fmt::Display, ops::Deref};
 
 use crate::element::{ElementIdentifier, ElementState, ElementType, Elements, ProcesResult};
 
@@ -232,5 +232,23 @@ impl Deref for Constraint {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Token::Op(op) => write!(f, "{}", op),
+            Token::Element(id) => write!(f, "{}", id),
+            Token::Tree(op, left, right) => write!(f, "{} {} {}", left, op, right),
+        }
+    }
+}
+
+impl Display for Ops {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Ops::Or => write!(f, "|"),
+        }
     }
 }

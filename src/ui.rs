@@ -44,8 +44,8 @@ mod elements {
             .into_iter()
             .map(|element| match element {
                 Draw::Separator(title) => {
-                    let padding = "-".repeat((max_name_length + 2 - title.len()) / 2);
-                    format!("+-+{}{}{}+", padding, title, padding)
+                    let padding = "-".repeat(max_name_length + 1 - title.len());
+                    format!("+-+-{}{}+", title, padding)
                 }
                 Draw::Element(name, state) => format!(
                     "|{}| {}{} |",
@@ -111,10 +111,35 @@ mod console {
             .iter_mut()
             .for_each(|x| *x = format!("| {}{} |", x, " ".repeat(max_len - x.len())));
 
-        let padding = format!("+{}+", "-".repeat(max_len + 2));
         lines.insert(0, format!("| >{}|", " ".repeat(max_len)));
-        lines.insert(0, padding.clone());
-        lines.push(padding);
+        lines.insert(0, format!("+-Console{}+", "-".repeat(max_len - 6)));
+        lines.push(format!("+{}+", "-".repeat(max_len + 2)));
+
+        lines.push(String::new());
+        lines.extend(constraints::get(app));
+        lines
+    }
+}
+
+mod constraints {
+    use super::*;
+
+    pub fn get(app: Arc<App>) -> Lines {
+        let mut lines = app
+            .constraints
+            .read()
+            .iter()
+            .rev()
+            .map(|x| x.to_string())
+            .collect::<Vec<_>>();
+
+        let max_len = lines.iter().map(|x| x.len()).max().unwrap_or(20);
+        lines
+            .iter_mut()
+            .for_each(|x| *x = format!("| {}{} |", x, " ".repeat(max_len - x.len())));
+
+        lines.insert(0, format!("+-Constraints{}+", "-".repeat(max_len - 10)));
+        lines.push(format!("+{}+", "-".repeat(max_len + 2)));
 
         lines
     }
