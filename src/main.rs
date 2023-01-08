@@ -23,7 +23,7 @@ fn main() {
 
     ui::draw(app.clone());
     for line in stdin().lines().map(Result::unwrap) {
-        println!("You typed: {}", line);
+        app.execute_command(line);
         ui::draw(app.clone());
     }
 }

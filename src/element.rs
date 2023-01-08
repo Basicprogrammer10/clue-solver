@@ -1,4 +1,8 @@
-use std::{fs, path::Path};
+use std::{
+    fmt::{self, Display, Formatter},
+    fs,
+    path::Path,
+};
 
 use toml::Value;
 
@@ -49,6 +53,47 @@ impl Elements {
             max_name_length,
         })
     }
+
+    pub fn process(&mut self, inp: &str) -> ProcesResult {
+        let mut chars = inp.chars();
+        let section = match chars.next() {
+            Some('l') => &mut self.locations,
+            Some('p') => &mut self.people,
+            Some('w') => &mut self.weapons,
+            Some(_) => return ProcesResult::InvalidSection,
+            None => return ProcesResult::Next,
+        };
+
+        let index = chars
+            .clone()
+            .take_while(|x| x.is_ascii_digit())
+            .collect::<String>();
+        let index_len = index.len();
+        let index = match index.parse::<usize>().ok().map(|x| x.saturating_sub(1)) {
+            Some(x) if x >= section.len() => return ProcesResult::InvalidIndex,
+            Some(x) => x,
+            None => return ProcesResult::InvalidIndex,
+        };
+
+        let new_state = match chars.nth(index_len) {
+            Some('c') => ElementState::Confirmed,
+            Some('x') => ElementState::Dismissed,
+            Some(_) => return ProcesResult::InvalidState,
+            None => return ProcesResult::Next,
+        };
+
+        section[index].state = new_state;
+        ProcesResult::Success
+    }
+}
+
+pub enum ProcesResult {
+    Next,
+    Success,
+
+    InvalidSection,
+    InvalidIndex,
+    InvalidState,
 }
 
 impl Element {
@@ -66,6 +111,19 @@ impl ElementState {
             Self::Unknown => '?',
             Self::Confirmed => 'C',
             Self::Dismissed => 'X',
+        }
+    }
+}
+
+impl Display for ProcesResult {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Next => write!(f, "Next"),
+            Self::Success => write!(f, "Success"),
+
+            Self::InvalidSection => write!(f, "Invalid section"),
+            Self::InvalidIndex => write!(f, "Invalid index"),
+            Self::InvalidState => write!(f, "Invalid state"),
         }
     }
 }

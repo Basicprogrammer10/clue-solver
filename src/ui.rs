@@ -10,55 +10,112 @@ use crossterm::{
 
 use crate::{app::App, element::ElementState};
 
+type Lines = Vec<String>;
+
 pub fn draw(app: Arc<App>) {
     let mut stdout = app.stdout.lock();
-    let max_name_length = app.elements.read().max_name_length;
     queue!(stdout, Clear(ClearType::All), MoveTo(0, 0)).unwrap();
 
-    let separator = format!("+-+{}+", "-".repeat(max_name_length + 2));
-    for element in get_draw(app.clone()) {
-        match element {
-            Draw::Separator => stdout.queue(Print(&separator)).unwrap(),
-            Draw::Element(name, state) => stdout
-                .queue(Print(format!(
+    let columns = [elements::get(app.clone()), console::get(app.clone())];
+    let max_len = columns.iter().map(|x| x.len()).max().unwrap_or(0);
+
+    for line in 0..max_len {
+        for column in &columns {
+            match column.get(line) {
+                Some(line) => queue!(stdout, Print(line), Print(" ")).unwrap(),
+                None => queue!(stdout, Print(" ".repeat(max_len + 1))).unwrap(),
+            }
+        }
+        queue!(stdout, Print("\n")).unwrap();
+    }
+    stdout
+        .queue(MoveTo(columns[0][0].len() as u16 + 5, 1))
+        .unwrap();
+
+    app.stdout.lock().flush().unwrap();
+}
+
+mod elements {
+    use super::*;
+
+    pub fn get(app: Arc<App>) -> Lines {
+        let max_name_length = app.elements.read().max_name_length;
+        get_draw(app)
+            .into_iter()
+            .map(|element| match element {
+                Draw::Separator(title) => {
+                    let padding = "-".repeat((max_name_length + 2 - title.len()) / 2);
+                    format!("+-+{}{}{}+", padding, title, padding)
+                }
+                Draw::Element(name, state) => format!(
                     "|{}| {}{} |",
                     state.as_char(),
                     name,
                     " ".repeat(max_name_length - name.len())
-                )))
-                .unwrap(),
-        };
-        stdout.queue(Print("\n")).unwrap();
+                ),
+            })
+            .collect()
     }
-    stdout.queue(Print("\n> ")).unwrap();
 
-    drop(stdout);
-    app.stdout.lock().flush().unwrap();
+    fn get_draw(app: Arc<App>) -> Vec<Draw> {
+        let mut out = Vec::new();
+        let card = app.elements.read();
+
+        // Todo: Replace this with iterator magic
+        out.push(Draw::Separator("(L)ocations".to_string()));
+        for element in &card.locations {
+            out.push(Draw::Element(element.name.clone(), element.state));
+        }
+        out.push(Draw::Separator("(P)eople".to_string()));
+        for element in &card.people {
+            out.push(Draw::Element(element.name.clone(), element.state));
+        }
+        out.push(Draw::Separator("(W)eapons".to_string()));
+        for element in &card.weapons {
+            out.push(Draw::Element(element.name.clone(), element.state));
+        }
+        out.push(Draw::Separator("".to_string()));
+
+        out
+    }
+
+    enum Draw {
+        Separator(String),
+        Element(String, ElementState),
+    }
 }
 
-fn get_draw(app: Arc<App>) -> Vec<Draw> {
-    let mut out = Vec::new();
-    let card = app.elements.read();
+mod console {
+    use super::*;
 
-    // Todo: Replace this with iterator magic
-    out.push(Draw::Separator);
-    for element in &card.locations {
-        out.push(Draw::Element(element.name.clone(), element.state));
-    }
-    out.push(Draw::Separator);
-    for element in &card.people {
-        out.push(Draw::Element(element.name.clone(), element.state));
-    }
-    out.push(Draw::Separator);
-    for element in &card.weapons {
-        out.push(Draw::Element(element.name.clone(), element.state));
-    }
-    out.push(Draw::Separator);
+    pub fn get(app: Arc<App>) -> Lines {
+        let mut lines = app
+            .command_history
+            .read()
+            .iter()
+            .rev()
+            .take(5)
+            .map(|x| {
+                format!(
+                    "{}: {}",
+                    x.0,
+                    match &x.1 {
+                        Some(x) => x.as_str(),
+                        None => "ok",
+                    }
+                )
+            })
+            .collect::<Vec<_>>();
+        let max_len = lines.iter().map(|x| x.len()).max().unwrap_or(0).max(20);
+        lines
+            .iter_mut()
+            .for_each(|x| *x = format!("| {}{} |", x, " ".repeat(max_len - x.len())));
 
-    out
-}
+        let padding = format!("+{}+", "-".repeat(max_len + 2));
+        lines.insert(0, format!("| >{}|", " ".repeat(max_len)));
+        lines.insert(0, padding.clone());
+        lines.push(padding);
 
-enum Draw {
-    Separator,
-    Element(String, ElementState),
+        lines
+    }
 }
