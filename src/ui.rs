@@ -1,16 +1,20 @@
-use std::{io::Write, sync::Arc};
+use std::{
+    fmt::Display,
+    io::{StdoutLock, Write},
+    sync::Arc,
+};
 
 use crossterm::{
     cursor::MoveTo,
     queue,
-    style::Print,
+    style::{ContentStyle, Print, PrintStyledContent, StyledContent},
     terminal::{Clear, ClearType},
     QueueableCommand,
 };
 
 use crate::{app::App, element::ElementState};
 
-type Lines = Vec<String>;
+type Lines = Vec<Line>;
 
 pub fn draw(app: Arc<App>) {
     let mut stdout = app.stdout.lock();
@@ -22,14 +26,17 @@ pub fn draw(app: Arc<App>) {
     for line in 0..max_len {
         for column in &columns {
             match column.get(line) {
-                Some(line) => queue!(stdout, Print(line), Print(" ")).unwrap(),
+                Some(line) => {
+                    line.queue(&mut stdout);
+                    stdout.queue(Print(" ")).unwrap();
+                }
                 None => queue!(stdout, Print(" ".repeat(max_len + 1))).unwrap(),
             }
         }
         queue!(stdout, Print("\n")).unwrap();
     }
     stdout
-        .queue(MoveTo(columns[0][0].len() as u16 + 5, 1))
+        .queue(MoveTo(columns[0][0].len as u16 + 5, 1))
         .unwrap();
 
     app.stdout.lock().flush().unwrap();
@@ -42,17 +49,20 @@ mod elements {
         let max_name_length = app.elements.read().max_name_length;
         get_draw(app)
             .into_iter()
-            .map(|element| match element {
-                Draw::Separator(title) => {
-                    let padding = "-".repeat(max_name_length + 1 - title.len());
-                    format!("+-+-{}{}+", title, padding)
+            .map(|element| {
+                match element {
+                    Draw::Separator(title) => {
+                        let padding = "-".repeat(max_name_length + 1 - title.len());
+                        format!("+-+-{}{}+", title, padding)
+                    }
+                    Draw::Element(name, state) => format!(
+                        "|{}| {}{} |",
+                        state.as_char(),
+                        name,
+                        " ".repeat(max_name_length - name.len())
+                    ),
                 }
-                Draw::Element(name, state) => format!(
-                    "|{}| {}{} |",
-                    state.as_char(),
-                    name,
-                    " ".repeat(max_name_length - name.len())
-                ),
+                .into()
             })
             .collect()
     }
@@ -86,6 +96,8 @@ mod elements {
 }
 
 mod console {
+    use crossterm::style::{Attribute, Color, Stylize};
+
     use super::*;
 
     pub fn get(app: Arc<App>) -> Lines {
@@ -96,26 +108,38 @@ mod console {
             .rev()
             .take(5)
             .map(|x| {
-                format!(
-                    "{}: {}",
-                    x.0,
-                    match &x.1 {
-                        Some(x) => x.as_str(),
-                        None => "ok",
-                    }
-                )
+                Line::from(format!("{}: ", x.0))
+                    .append(x.1.clone().unwrap_or_else(|| "ok".to_owned()))
+                    .styled(
+                        ContentStyle::new()
+                            .attribute(Attribute::Bold)
+                            .with(match x.1 {
+                                Some(_) => Color::Red,
+                                None => Color::Green,
+                            }),
+                    )
             })
-            .collect::<Vec<_>>();
-        let max_len = lines.iter().map(|x| x.len()).max().unwrap_or(0).max(20);
-        lines
-            .iter_mut()
-            .for_each(|x| *x = format!("| {}{} |", x, " ".repeat(max_len - x.len())));
+            .collect::<Vec<Line>>();
+        let max_len = lines.iter().map(|x| x.len).max().unwrap_or(0).max(20);
+        lines.iter_mut().for_each(|x| {
+            *x = Line::from("| ")
+                .append_line(x)
+                .append(" ".repeat(max_len - x.len))
+                .append(" |")
+        });
 
-        lines.insert(0, format!("| >{}|", " ".repeat(max_len)));
-        lines.insert(0, format!("+-Console{}+", "-".repeat(max_len - 6)));
-        lines.push(format!("+{}+", "-".repeat(max_len + 2)));
+        lines.insert(0, format!("| >{}|", " ".repeat(max_len)).into());
+        lines.insert(
+            0,
+            Line::from("+-")
+                .append("Console")
+                .styled(ContentStyle::new().attribute(Attribute::Bold))
+                .append("-".repeat(max_len - 6))
+                .append("+"),
+        );
+        lines.push(format!("+{}+", "-".repeat(max_len + 2)).into());
 
-        lines.push(String::new());
+        lines.push(String::new().into());
         lines.extend(constraints::get(app));
         lines
     }
@@ -130,17 +154,87 @@ mod constraints {
             .read()
             .iter()
             .rev()
-            .map(|x| x.to_string())
-            .collect::<Vec<_>>();
+            .map(|x| x.to_string().into())
+            .collect::<Vec<Line>>();
 
-        let max_len = lines.iter().map(|x| x.len()).max().unwrap_or(20);
+        let max_len = lines.iter().map(|x| x.len).max().unwrap_or(0).max(20);
+        lines.iter_mut().for_each(|x| {
+            *x = format!("| {}{} |", x.content(), " ".repeat(max_len - x.len)).into()
+        });
+
+        lines.insert(
+            0,
+            format!("+-Constraints{}+", "-".repeat(max_len - 10)).into(),
+        );
+        lines.push(format!("+{}+", "-".repeat(max_len + 2)).into());
+
         lines
-            .iter_mut()
-            .for_each(|x| *x = format!("| {}{} |", x, " ".repeat(max_len - x.len())));
+    }
+}
 
-        lines.insert(0, format!("+-Constraints{}+", "-".repeat(max_len - 10)));
-        lines.push(format!("+{}+", "-".repeat(max_len + 2)));
+pub struct Line {
+    elements: Vec<StyledContent<String>>,
+    len: usize,
+}
 
-        lines
+impl Line {
+    fn new() -> Self {
+        Self {
+            elements: Vec::new(),
+            len: 0,
+        }
+    }
+
+    fn content(&self) -> String {
+        self.elements
+            .iter()
+            .map(|x| x.content().to_string())
+            .collect::<Vec<_>>()
+            .join("")
+    }
+
+    fn append<T: Into<Line>>(self, other: T) -> Self {
+        let new = other.into();
+        Self {
+            len: self.len + new.len,
+            elements: [self.elements, new.elements].concat(),
+        }
+    }
+
+    fn append_line(self, other: &Line) -> Self {
+        Self {
+            len: self.len + other.len,
+            elements: [self.elements, other.elements.clone()].concat(),
+        }
+    }
+
+    // Append a style to the last element
+    fn styled(self, style: ContentStyle) -> Self {
+        Self {
+            len: self.len,
+            elements: {
+                let mut elements = self.elements;
+                let last = elements.pop().unwrap();
+                elements.push(StyledContent::new(style, last.content().to_string()));
+                elements
+            },
+        }
+    }
+
+    fn queue(&self, stdout: &mut StdoutLock) {
+        for element in self.elements.iter() {
+            queue!(stdout, PrintStyledContent(element.clone())).unwrap();
+        }
+    }
+}
+
+impl<T: Display> From<T> for Line {
+    fn from(inp: T) -> Self {
+        let inp = inp.to_string();
+
+        Self {
+            len: inp.len(),
+            elements: vec![StyledContent::new(ContentStyle::default(), inp)],
+        }
     }
 }

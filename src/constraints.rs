@@ -51,13 +51,13 @@ impl Constraint {
             x => return Err(x),
         };
 
-        const test_states: [ElementState; 2] = [ElementState::Confirmed, ElementState::Dismissed];
+        const TEST_STATES: [ElementState; 2] = [ElementState::Confirmed, ElementState::Dismissed];
         let mut result = [false; 2];
 
-        for i in 0..test_states.len() {
+        for i in 0..TEST_STATES.len() {
             let mut elements = elements.clone();
-            elements.set_state(&solve_for, test_states[i]);
-            result[i] = self._evaluate(&elements);
+            elements.set_state(&solve_for, TEST_STATES[i]);
+            result[i] = self._evaluate(&self.0, &elements);
         }
 
         Ok((
@@ -73,9 +73,16 @@ impl Constraint {
 
     // true -> Confirmed
     // false -> Dismissed
-    fn _evaluate(&self, elements: &Elements) -> bool {
-        match &self.0 {
-            Token::Tree(op, a, b) => true,
+    fn _evaluate(&self, token: &Token, elements: &Elements) -> bool {
+        match token {
+            Token::Tree(op, a, b) => {
+                let a = self._evaluate(a, elements);
+                let b = self._evaluate(b, elements);
+
+                match op {
+                    Ops::Or => a || b,
+                }
+            }
             Token::Element(id) => {
                 let state = elements.get_state(id);
                 match state {
